@@ -99,11 +99,12 @@ def findLibClang():
         # print("trying " + path, file=sys.stderr)
         if os.path.exists(path + "/libclang" + libSuffix):
             return path
-        elif (sys.platform == "win32" or sys.platform == "msys"):
-            # Check for versioned and non-versioned libclang.dll if on msys
-            pattern = re.compile(r'^libclang(-\d+(\.\d+)?)?\.dll$')
-            if os.path.exists(path):
-                for filename in os.listdir(path):
+        elif os.path.exists(path):
+            for filename in os.listdir(path):
+                if filename.startswith("libclang") and (libSuffix in filename):
+                    return os.path.join(path, filename)
+                elif (sys.platform == "win32" or sys.platform == "msys"):
+                    pattern = re.compile(r'^libclang(-\d+(\.\d+)?)?\.dll$')
                     if pattern.match(filename):
                         return os.path.join(path, filename)
 
