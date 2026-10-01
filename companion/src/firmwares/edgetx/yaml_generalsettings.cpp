@@ -181,6 +181,34 @@ static const YamlLookupTable QMPageLut = {
   {  GeneralSettings::QM_APP, "APP" },
 };
 
+static inline unsigned int crossfireIndexToStore(unsigned int i)
+{
+  switch (i) {
+    case 0: return 5; // 115k
+    case 1: return 0; // 400k
+    case 2: return 6; // 416k
+    case 3: return 1; // 921k
+    case 4: return 2; // 1.87M
+    case 5: return 3; // 3.75M
+    case 6: return 4; // 5.25M
+    default: return 0;
+  }
+}
+
+static inline unsigned int crossfireStoreToIndex(unsigned int v)
+{
+  switch (v) {
+    case 0: return 1; // 400k
+    case 1: return 3; // 921k
+    case 2: return 4; // 1.87M
+    case 3: return 5; // 3.75M
+    case 4: return 6; // 5.25M
+    case 5: return 0; // 115k
+    case 6: return 2; // 416k
+    default: return 1;
+  }
+}
+
 YamlTelemetryBaudrate::YamlTelemetryBaudrate(
     const unsigned int* moduleBaudrate)
 {
@@ -188,8 +216,7 @@ YamlTelemetryBaudrate::YamlTelemetryBaudrate(
                             Board::SportMaxBaudRate) < 400000) {
     value = *moduleBaudrate;
   } else {
-    value = (*moduleBaudrate + moduleBaudratesList.size() - 1) %
-             moduleBaudratesList.size();
+    value = crossfireIndexToStore(*moduleBaudrate);
   }
 }
 
@@ -200,7 +227,7 @@ void YamlTelemetryBaudrate::toCpn(unsigned int* moduleBaudrate,
       400000) {
     *moduleBaudrate = value;
   } else {
-    *moduleBaudrate = (value + 1) % moduleBaudratesList.size();
+    *moduleBaudrate = crossfireStoreToIndex(value);
   }
 }
 

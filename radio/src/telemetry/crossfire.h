@@ -126,6 +126,7 @@ void crossfireSetDefault(int index, uint16_t id, uint8_t subId);
 const uint32_t CROSSFIRE_BAUDRATES[] = {
   115200,
   400000,
+  416666,
   921600,
   1870000,
   3750000,
@@ -147,23 +148,50 @@ const uint32_t CROSSFIRE_BAUDRATES[] = {
 const uint8_t CROSSFIRE_FRAME_PERIODS[] = {
   16,
   4,
+  4,
   2,
   2,
   2,
   2,
 };
+
+static inline uint8_t crossfireStoreToIndex(uint8_t v)
+{
+  switch (v) {
+    case 0: return 1; // 400k (default 0 in EEPROM)
+    case 1: return 3; // 921k
+    case 2: return 4; // 1.87M
+    case 3: return 5; // 3.75M
+    case 4: return 6; // 5.25M
+    case 5: return 0; // 115k
+    case 6: return 2; // 416k
+    default: return 1; // fallback to 400k
+  }
+}
+
+static inline uint8_t crossfireIndexToStore(uint8_t i)
+{
+  switch (i) {
+    case 0: return 5; // 115k
+    case 1: return 0; // 400k
+    case 2: return 6; // 416k
+    case 3: return 1; // 921k
+    case 4: return 2; // 1.87M
+    case 5: return 3; // 3.75M
+    case 6: return 4; // 5.25M
+    default: return 0;
+  }
+}
+
 #if SPORT_MAX_BAUDRATE < 400000
   // index 0 (115200) is the default 0 value
-  #define CROSSFIRE_STORE_TO_INDEX(v) v
-  #define CROSSFIRE_INDEX_TO_STORE(i) i
+  #define CROSSFIRE_STORE_TO_INDEX(v) (v)
+  #define CROSSFIRE_INDEX_TO_STORE(i) (i)
 #else
   // index 1 (400000) is the default 0 value
   #define CROSSFIRE_DEFAULT_INDEX 1
-  #define CROSSFIRE_STORE_TO_INDEX(v) \
-    (v + CROSSFIRE_DEFAULT_INDEX) % DIM(CROSSFIRE_BAUDRATES)
-  #define CROSSFIRE_INDEX_TO_STORE(i)                          \
-    (i + (DIM(CROSSFIRE_BAUDRATES) - CROSSFIRE_DEFAULT_INDEX)) \
-        % DIM(CROSSFIRE_BAUDRATES)
+  #define CROSSFIRE_STORE_TO_INDEX(v) crossfireStoreToIndex(v)
+  #define CROSSFIRE_INDEX_TO_STORE(i) crossfireIndexToStore(i)
 #endif
 
 #if defined(CROSSFIRE)

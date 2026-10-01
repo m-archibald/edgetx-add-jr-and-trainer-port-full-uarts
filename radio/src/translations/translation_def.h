@@ -67,7 +67,7 @@
 #define TR_VMLTPX2                      "+=","*=",":="
 #define TR_PPMUNIT                      "0.--","0.0","us"
 #define TR_FUNCTION_SWITCH_GROUPS       "---", TR_SWITCH_GROUP" 1", TR_SWITCH_GROUP" 2", TR_SWITCH_GROUP" 3"
-#define TR_CRSF_BAUDRATE                "115k","400k","921k","1.87M","3.75M","5.25M"
+#define TR_CRSF_BAUDRATE                "115k","400k","416k","921k","1.87M","3.75M","5.25M"
 #define TR_MODULE_PROTOCOLS             TR_OFF,"PPM","XJT","ISRM","DSM2","CRSF","MULTI","R9M","R9M ACCESS","R9MLite","R9ML ACCESS",\
                                         "GHST","R9MLP ACCESS","SBUS","XJT Lite","AFHDS2A","AFHDS3",TR("Lemon DSMP","LemonRx DSMP"),\
                                         "CRSF (Full)","Lua"

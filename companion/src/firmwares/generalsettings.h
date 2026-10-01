@@ -55,7 +55,7 @@ constexpr char AIM_TRAINERMIX_SRC[]        {"trainermix.src"};
 constexpr int MAX_KEYSHORTCUTS             {6};
 constexpr int MAX_QMFAVOURITES             {12};
 
-static const QStringList moduleBaudratesList({"115K", "400K", "921K", "1.87M",
+static const QStringList moduleBaudratesList({"115K", "400K", "416K", "921K", "1.87M",
                                               "3.75M", "5.25M"});
 
 
