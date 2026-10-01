@@ -222,6 +222,7 @@ enum MenuModelSetupItems {
   ITEM_MODEL_SETUP_EXTERNAL_MODULE_PXX2_RECEIVER_1,
   ITEM_MODEL_SETUP_EXTERNAL_MODULE_PXX2_RECEIVER_2,
   ITEM_MODEL_SETUP_EXTERNAL_MODULE_PXX2_RECEIVER_3,
+  ITEM_MODEL_SETUP_EXTERNAL_MODULE_SPORT_PIN_MODE,
 
 #endif
 
@@ -293,6 +294,7 @@ static uint8_t VIEWOPT_ROW(uint8_t value) { return expandState.viewOpt ? value :
 #define IF_NOT_PXX2_MODULE(module, xxx)  (isModulePXX2(module) ? HIDDEN_ROW : (uint8_t)(xxx))
 #define IF_ACCESS_MODULE_RF(module, xxx) (isModuleRFAccess(module) ? (uint8_t)(xxx) : HIDDEN_ROW)
 #define IF_NOT_ACCESS_MODULE_RF(module, xxx) (isModuleRFAccess(module) ? HIDDEN_ROW : (uint8_t)(xxx))
+#define IF_MODULE_SPORT_PIN_MODE(module) ((isModuleCrossfireFull(module) || isModuleLua(module)) ? (uint8_t)0 : HIDDEN_ROW)
 #if defined(CROSSFIRE) || defined(GHOST)
 #define IF_MODULE_SYNCED(module, xxx)    ((isModuleCrossfire(module) || isModuleGhost(module)) ? (uint8_t)(xxx) : HIDDEN_ROW)
 #if SPORT_MAX_BAUDRATE < 400000
@@ -482,7 +484,7 @@ void editTimerCountdown(int timerIdx, coord_t y, LcdFlags attr, event_t event)
   }
   if (attr && s_editMode > 0) {
     switch (menuHorizontalPosition) {
-      case 0: 
+      case 0:
       {
         value = timer.countdownBeep;
         if (timer.extraHaptic) value += (COUNTDOWN_NON_HAPTIC_LAST + 1);
@@ -566,7 +568,8 @@ void editTimerCountdown(int timerIdx, coord_t y, LcdFlags attr, event_t event)
     IF_PXX2_MODULE(EXTERNAL_MODULE, 0),           /* Module options */ \
     IF_ACCESS_MODULE_RF(EXTERNAL_MODULE, 0),      /* Receiver 1 */ \
     IF_ACCESS_MODULE_RF(EXTERNAL_MODULE, 0),      /* Receiver 2 */ \
-    IF_ACCESS_MODULE_RF(EXTERNAL_MODULE, 0),      /* Receiver 3 */
+    IF_ACCESS_MODULE_RF(EXTERNAL_MODULE, 0),      /* Receiver 3 */ \
+    IF_MODULE_SPORT_PIN_MODE(EXTERNAL_MODULE),
 #else
   #define EXTERNAL_MODULE_ROWS
 #endif
@@ -701,7 +704,7 @@ static void menuModelCFSOne(event_t event)
       (uint8_t)((config != SWITCH_NONE && config != SWITCH_GLOBAL) ? 0 : HIDDEN_ROW),
 #endif
     });
-  
+
   int8_t sub = menuVerticalPosition;
   int8_t editMode = s_editMode;
 
@@ -1230,7 +1233,7 @@ void menuModelSetup(event_t event)
       case ITEM_MODEL_SETUP_CHECKLIST_DISPLAY:
         g_model.displayChecklist = editCheckBox(g_model.displayChecklist, MODEL_SETUP_2ND_COLUMN, y, STR_CHECKLIST, attr, event, INDENT_WIDTH);
         break;
-      
+
       case ITEM_MODEL_SETUP_CHECKLIST_INTERACTIVE:
         g_model.checklistInteractive = editCheckBox(g_model.checklistInteractive, MODEL_SETUP_2ND_COLUMN, y, STR_CHECKLIST_INTERACTIVE, attr, event, INDENT_WIDTH);
         break;
@@ -1598,14 +1601,29 @@ void menuModelSetup(event_t event)
         }
         break;
 
+#if defined(HARDWARE_EXTERNAL_MODULE)
+      case ITEM_MODEL_SETUP_EXTERNAL_MODULE_SPORT_PIN_MODE: {
+        ModuleData & moduleData = g_model.moduleData[EXTERNAL_MODULE];
+        lcdDrawTextIndented(y, STR_SPORT_PIN_MODE);
+        lcdDrawTextAtIndex(MODEL_SETUP_2ND_COLUMN, y, STR_SPORT_PIN_MODES, moduleData.sportPinMode, attr | LEFT);
+        if (attr) {
+          CHECK_INCDEC_MODELVAR(event, moduleData.sportPinMode, SPORT_PIN_MODE_CRSF, SPORT_PIN_MODE_MAX);
+          if (checkIncDec_Ret) {
+            restartModule(EXTERNAL_MODULE);
+          }
+        }
+        break;
+      }
+#endif
+
 #if defined(HARDWARE_EXTERNAL_MODULE) && (defined(CROSSFIRE) || defined(GHOST))
       case ITEM_MODEL_SETUP_EXTERNAL_MODULE_BAUDRATE: {
         ModuleData & moduleData = g_model.moduleData[moduleIdx];
         lcdDrawTextIndented(y, STR_BAUDRATE);
         if (isModuleCrossfire(EXTERNAL_MODULE)) {
-          lcdDrawTextAtIndex(MODEL_SETUP_2ND_COLUMN, y, STR_CRSF_BAUDRATE, CROSSFIRE_STORE_TO_INDEX(moduleData.crsf.telemetryBaudrate),attr | LEFT);
+          lcdDrawTextAtIndex(MODEL_SETUP_2ND_COLUMN, y, STR_CRSF_BAUDRATE, CROSSFIRE_STORE_TO_INDEX(moduleData.crsf.telemetryBaudrate), attr | LEFT);
           if (attr) {
-            moduleData.crsf.telemetryBaudrate =CROSSFIRE_INDEX_TO_STORE(checkIncDecModel(event,CROSSFIRE_STORE_TO_INDEX(moduleData.crsf.telemetryBaudrate),0, DIM(CROSSFIRE_BAUDRATES) - 1));
+            moduleData.crsf.telemetryBaudrate = CROSSFIRE_INDEX_TO_STORE(checkIncDecModel(event, CROSSFIRE_STORE_TO_INDEX(moduleData.crsf.telemetryBaudrate), 0, DIM(CROSSFIRE_BAUDRATES) - 1));
             if (checkIncDec_Ret) {
               restartModule(moduleIdx);
             }
@@ -1644,10 +1662,16 @@ void menuModelSetup(event_t event)
 #endif
 #if defined(HARDWARE_EXTERNAL_MODULE)
       case ITEM_MODEL_SETUP_EXTERNAL_MODULE_ARMING_MODE:
-#endif 
-        g_model.moduleData[moduleIdx].crsf.crsfArmingMode = 
-          editChoice(MODEL_SETUP_2ND_COLUMN, y, STR_CRSF_ARMING_MODE, STR_CRSF_ARMING_MODES, 
-          g_model.moduleData[moduleIdx].crsf.crsfArmingMode, ARMING_MODE_FIRST, ARMING_MODE_LAST, attr, event, INDENT_WIDTH);
+#endif
+        if (moduleIdx == EXTERNAL_MODULE && isModuleCrossfireFull(EXTERNAL_MODULE)) {
+          g_model.moduleData[moduleIdx].crsf.jrUartArmingMode =
+            editChoice(MODEL_SETUP_2ND_COLUMN, y, STR_CRSF_ARMING_MODE, STR_CRSF_ARMING_MODES,
+            g_model.moduleData[moduleIdx].crsf.jrUartArmingMode, ARMING_MODE_FIRST, ARMING_MODE_LAST, attr, event, INDENT_WIDTH);
+        } else {
+          g_model.moduleData[moduleIdx].crsf.crsfArmingMode =
+            editChoice(MODEL_SETUP_2ND_COLUMN, y, STR_CRSF_ARMING_MODE, STR_CRSF_ARMING_MODES,
+            g_model.moduleData[moduleIdx].crsf.crsfArmingMode, ARMING_MODE_FIRST, ARMING_MODE_LAST, attr, event, INDENT_WIDTH);
+        }
         break;
 
 #if defined(HARDWARE_INTERNAL_MODULE)
@@ -1657,9 +1681,15 @@ void menuModelSetup(event_t event)
       case ITEM_MODEL_SETUP_EXTERNAL_MODULE_ARMING_TRIGGER:
 #endif
         lcdDrawTextIndented(y, STR_SWITCH);
-        drawSwitch(MODEL_SETUP_2ND_COLUMN, y, g_model.moduleData[moduleIdx].crsf.crsfArmingTrigger, attr);
-        if(attr)
-          CHECK_INCDEC_SWITCH(event, g_model.moduleData[moduleIdx].crsf.crsfArmingTrigger, SWSRC_FIRST, SWSRC_LAST, EE_MODEL, isSwitchAvailableForArming);
+        if (moduleIdx == EXTERNAL_MODULE && isModuleCrossfireFull(EXTERNAL_MODULE)) {
+          drawSwitch(MODEL_SETUP_2ND_COLUMN, y, g_model.moduleData[moduleIdx].crsf.jrUartArmingTrigger, attr);
+          if (attr)
+            CHECK_INCDEC_SWITCH(event, g_model.moduleData[moduleIdx].crsf.jrUartArmingTrigger, SWSRC_FIRST, SWSRC_LAST, EE_MODEL, isSwitchAvailableForArming);
+        } else {
+          drawSwitch(MODEL_SETUP_2ND_COLUMN, y, g_model.moduleData[moduleIdx].crsf.crsfArmingTrigger, attr);
+          if (attr)
+            CHECK_INCDEC_SWITCH(event, g_model.moduleData[moduleIdx].crsf.crsfArmingTrigger, SWSRC_FIRST, SWSRC_LAST, EE_MODEL, isSwitchAvailableForArming);
+        }
         break;
 #endif
 
@@ -2446,10 +2476,10 @@ void menuModelSetup(event_t event)
 #endif
 #endif
 #if defined(AFHDS3) && defined(HARDWARE_EXTERNAL_MODULE)
-      case ITEM_MODEL_SETUP_EXTERNAL_MODULE_AFHDS3_STATUS: 
+      case ITEM_MODEL_SETUP_EXTERNAL_MODULE_AFHDS3_STATUS:
 #endif
 #if (defined(MULTIMODULE) | defined(DSMP) | defined(AFHDS3)) && defined(HARDWARE_EXTERNAL_MODULE)
-      case ITEM_MODEL_SETUP_EXTERNAL_MODULE_DSMP_STATUS: 
+      case ITEM_MODEL_SETUP_EXTERNAL_MODULE_DSMP_STATUS:
       {
         // MultiModule & LemonDSMP & AFHDS3 Status
         lcdDrawTextIndented(y, STR_MODULE_STATUS);
@@ -2465,7 +2495,7 @@ void menuModelSetup(event_t event)
                          MODEL_SETUP_2ND_COLUMN, y, STR_DSMP_ENABLE_AETR, attr,
                          event, INDENT_WIDTH);
         break;
-#endif 
+#endif
 
 
 #if defined(MULTIMODULE)

@@ -83,3 +83,7 @@ constexpr int g_use_plural2 = USE_PLURAL2;
 #define STR_SPORT       "S.PORT"
 #define STR_FBUS        "FBUS"
 #define STR_SBUS24      "SBUS24"
+
+#if !defined(TR_SPORT_PIN_MODE)
+#define TR_SPORT_PIN_MODE TR("S.Port Pin", "S.Port Pin Function")
+#endif

@@ -60,6 +60,7 @@ class ChannelRange : public Window
 class ModuleChannelRange : public ChannelRange
 {
   uint8_t moduleIdx;
+  bool isJrUart;
 
   void update() override;
 
@@ -73,7 +74,7 @@ class ModuleChannelRange : public ChannelRange
   uint8_t getChannelsMax() override;
 
  public:
-  ModuleChannelRange(Window* parent, uint8_t moduleIdx);
+  ModuleChannelRange(Window* parent, uint8_t moduleIdx, bool isJrUart = false);
 
   int8_t getChannelsCount() override;
 };

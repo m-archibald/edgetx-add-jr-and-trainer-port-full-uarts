@@ -1257,7 +1257,7 @@ static void _sp_Tx(uint8_t* buf, uint32_t len)
   }
 }
 
-#if defined(HARDWARE_INTERNAL_MODULE)
+#if defined(HARDWARE_INTERNAL_MODULE) || defined(HARDWARE_EXTERNAL_MODULE)
 static etx_module_state_t *spModuleState = nullptr;
 
 static void spModuleInit(int port_n, int baudrate)
@@ -1269,24 +1269,30 @@ static void spModuleInit(int port_n, int baudrate)
       .polarity = ETX_Pol_Normal,
   };
 
+  modulePortSetPower(port_n, true);
+
   spModuleState =
       modulePortInitSerial(port_n, ETX_MOD_PORT_UART, &params, false);
-  _sp_drv = modulePortGetSerialDrv(spModuleState->rx);
-  _sp_ctx = modulePortGetCtx(spModuleState->rx);
+  if (spModuleState) {
+    _sp_drv = modulePortGetSerialDrv(spModuleState->rx);
+    _sp_ctx = modulePortGetCtx(spModuleState->rx);
+  }
 }
 
 static void spModuleDeInit(int port_n)
 {
   // and stop module
-  modulePortDeInit(spModuleState);
-  spModuleState = nullptr;
+  if (spModuleState) {
+    modulePortDeInit(spModuleState);
+    spModuleState = nullptr;
+  }
 
   // power off the module and wait for a bit
   modulePortSetPower(port_n, false);
   delay_ms(200);
 }
 
-#endif // HARDWARE_INTERNAL_MODULE
+#endif // HARDWARE_INTERNAL_MODULE || HARDWARE_EXTERNAL_MODULE
 
 #if defined(FLYSKY_GIMBAL)
 #include "flysky_gimbal_driver.h"
@@ -1352,8 +1358,12 @@ int cliSerialPassthrough(const char **argv)
       deinitCB = spModuleDeInit;
       break;
 #endif
-    // TODO:
-    //  - external module (S.PORT?)
+#if defined(HARDWARE_EXTERNAL_MODULE)
+    case EXTERNAL_MODULE:
+      initCB = spModuleInit;
+      deinitCB = spModuleDeInit;
+      break;
+#endif
     default:
       cliSerialPrint("%s: invalid port # '%i'", argv[0], port_n);
       return -1;

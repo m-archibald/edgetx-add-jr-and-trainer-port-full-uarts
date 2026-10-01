@@ -219,20 +219,31 @@ etx_module_state_t* modulePortInitSerial(uint8_t module, uint8_t port,
 
   bool init_ok = false;
   if (dir == duplex) {
+    if (port == ETX_MOD_PORT_SPORT && state->tx.port && state->tx.port->port == ETX_MOD_PORT_UART) {
+      init_ok = _init_serial_driver(&state->sport, found_port, params);
+    } else {
+      // init RX first, in case TX was already done previously
+      init_ok = _init_serial_driver(&state->rx, found_port, params);
 
-    // init RX first, in case TX was already done previously
-    init_ok = _init_serial_driver(&state->rx, found_port, params);
-
-    // do not overwrite TX state if it has already been set:
-    // -> support using S.PORT in bidir mode
-    if (!state->tx.port) {
-      state->tx.port = state->rx.port;
-      state->tx.ctx = state->rx.ctx;
+      // do not overwrite TX state if it has already been set:
+      // -> support using S.PORT in bidir mode
+      if (!state->tx.port) {
+        state->tx.port = state->rx.port;
+        state->tx.ctx = state->rx.ctx;
+      }
     }
   } else if (dir == ETX_Dir_TX) {
-    init_ok = _init_serial_driver(&state->tx, found_port, params);
+    if (port == ETX_MOD_PORT_SPORT && state->tx.port && state->tx.port->port == ETX_MOD_PORT_UART) {
+      init_ok = _init_serial_driver(&state->sport, found_port, params);
+    } else {
+      init_ok = _init_serial_driver(&state->tx, found_port, params);
+    }
   } else if (dir == ETX_Dir_RX) {
-    init_ok = _init_serial_driver(&state->rx, found_port, params);
+    if (port == ETX_MOD_PORT_SPORT && state->rx.port && state->rx.port->port == ETX_MOD_PORT_UART) {
+      init_ok = _init_serial_driver(&state->sport, found_port, params);
+    } else {
+      init_ok = _init_serial_driver(&state->rx, found_port, params);
+    }
   }
 
   return init_ok ? state : nullptr;
@@ -273,6 +284,10 @@ void modulePortDeInit(etx_module_state_t* st)
 
   if (st->rx.port != nullptr && st->rx.port != st->tx.port) {
     _deinit_driver(&st->rx);
+  }
+
+  if (st->sport.port != nullptr) {
+    _deinit_driver(&st->sport);
   }
 
   modulePortClear(st);
@@ -320,9 +335,11 @@ bool modulePortIsPortUsedByModule(uint8_t module, uint8_t port)
 
   auto tx_port = mod_st->tx.port;
   auto rx_port = mod_st->rx.port;
+  auto sport_port = mod_st->sport.port;
 
   return (tx_port && tx_port->port == port) ||
-         (rx_port && rx_port->port == port);
+         (rx_port && rx_port->port == port) ||
+         (sport_port && sport_port->port == port);
 }
 
 bool modulePortIsPortUsed(uint8_t port)

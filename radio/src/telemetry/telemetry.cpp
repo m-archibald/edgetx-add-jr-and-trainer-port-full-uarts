@@ -131,6 +131,14 @@ rxStatStruct *getRxStatLabels() {
       break;
 
     case MODULE_TYPE_CROSSFIRE:
+    case MODULE_TYPE_CRSF_FULL:
+#if defined(LUA) && defined(EXTMODULE_USART)
+    case MODULE_TYPE_LUA:
+      if (g_model.moduleData[moduleToUse].sportPinMode != SPORT_PIN_MODE_CRSF) {
+        break;
+      }
+      [[fallthrough]];
+#endif
     case MODULE_TYPE_GHOST:
       rxStat.label = STR_RXSTAT_LABEL_RQLY;
       rxStat.unit = STR_RXSTAT_UNIT_PERCENT;

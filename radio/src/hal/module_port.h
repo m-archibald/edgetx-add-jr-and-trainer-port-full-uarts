@@ -101,6 +101,7 @@ typedef struct {
 
   etx_module_driver_t tx;
   etx_module_driver_t rx;
+  etx_module_driver_t sport;
 
   void* user_data;
 

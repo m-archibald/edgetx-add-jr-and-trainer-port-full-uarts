@@ -21,9 +21,11 @@
 
 #include "crossfire_settings.h"
 
+#include "button.h"
 #include "edgetx.h"
 #include "getset_helpers.h"
 #include "mixer_scheduler.h"
+#include "numberedit.h"
 #include "telemetry/crossfire.h"
 
 #define SET_DIRTY() storageDirty(EE_MODEL)
@@ -84,7 +86,8 @@ void CrossfireSettings::update() {
       lblArmMode->show();
       choArmMode->show();
 
-      if(md->crsf.crsfArmingMode == ARMING_MODE_SWITCH)
+      uint8_t armMode = (moduleIdx == EXTERNAL_MODULE && isModuleCrossfireFull(moduleIdx)) ? md->crsf.jrUartArmingMode : md->crsf.crsfArmingMode;
+      if(armMode == ARMING_MODE_SWITCH)
         choArmSwitch->show();
       else
         choArmSwitch->hide();

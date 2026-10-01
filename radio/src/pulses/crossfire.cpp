@@ -76,7 +76,7 @@ uint8_t createCrossfirePingFrame(uint8_t moduleIdx, uint8_t * frame)
   return buf - frame;
 }
 
-uint8_t createCrossfireModelIDFrame(uint8_t moduleIdx, uint8_t * frame)
+uint8_t createCrossfireModelIDFrame(uint8_t moduleIdx, uint8_t * frame, uint8_t endpoint = 0)
 {
   uint8_t * buf = frame;
   *buf++ = UART_SYNC;                                 /* device address */
@@ -86,14 +86,20 @@ uint8_t createCrossfireModelIDFrame(uint8_t moduleIdx, uint8_t * frame)
   *buf++ = RADIO_ADDRESS;                             /* Origin Address */
   *buf++ = SUBCOMMAND_CRSF;                           /* sub command */
   *buf++ = COMMAND_MODEL_SELECT_ID;                   /* command of set model/receiver id */
-  *buf++ = g_model.header.modelId[moduleIdx];         /* model ID */
+  uint8_t modelId = g_model.header.modelId[moduleIdx];
+#if defined(HARDWARE_EXTERNAL_MODULE)
+  if (moduleIdx == EXTERNAL_MODULE && isModuleCrossfireFull(moduleIdx) && endpoint != TELEMETRY_ENDPOINT_SPORT) {
+    modelId = g_model.moduleData[EXTERNAL_MODULE].crsf.jrUartModelId;
+  }
+#endif
+  *buf++ = modelId;                                   /* model ID */
   *buf++ = crc8_BA(frame + 2, 6);
   *buf++ = crc8(frame + 2, 7);
   return buf - frame;
 }
 
 // Range for pulses (channels output) is [-1024:+1024]
-uint8_t createCrossfireChannelsFrame(uint8_t moduleIdx, uint8_t * frame, int16_t * pulses)
+uint8_t createCrossfireChannelsFrame(uint8_t moduleIdx, uint8_t * frame, int16_t * pulses, uint8_t endpoint)
 {
   //
   // sends channel data and also communicates status information in status byte:
@@ -128,8 +134,16 @@ uint8_t createCrossfireChannelsFrame(uint8_t moduleIdx, uint8_t * frame, int16_t
   //
   ModuleData *md = &g_model.moduleData[moduleIdx];
 
-  if (md->crsf.crsfArmingMode == ARMING_MODE_SWITCH) {
-    swsrc_t sw =  md->crsf.crsfArmingTrigger;
+  uint8_t armMode = md->crsf.crsfArmingMode;
+  swsrc_t armTrigger = md->crsf.crsfArmingTrigger;
+
+  if (moduleIdx == EXTERNAL_MODULE && isModuleCrossfireFull(moduleIdx) && endpoint != TELEMETRY_ENDPOINT_SPORT) {
+    armMode = md->crsf.jrUartArmingMode;
+    armTrigger = md->crsf.jrUartArmingTrigger;
+  }
+
+  if (armMode == ARMING_MODE_SWITCH) {
+    swsrc_t sw = armTrigger;
 
     *buf = (sw != SWSRC_NONE) && getSwitch(sw, 0);  // commanded armed status in Switch mode
   } else {
@@ -137,7 +151,7 @@ uint8_t createCrossfireChannelsFrame(uint8_t moduleIdx, uint8_t * frame, int16_t
   }
 
   buf++;
-  
+
   //
   // add crc
   //
@@ -161,7 +175,7 @@ static void setupPulsesCrossfire(uint8_t module, uint8_t*& p_buf,
   {
     //
     // An ELRS module stores the RF parameters in a model specific way using the
-    // modelID as index. If the module resets after it was initally initialized the modelID 
+    // modelID as index. If the module resets after it was initally initialized the modelID
     // needs to be resent as otherwise the module assumes modelID 0 which leads to the
     // module using the stored RF parameters for the model with modelID 0. This is not only
     // annoying but also potentially dangerous as a receiver will no longer re-connect.
@@ -171,24 +185,24 @@ static void setupPulsesCrossfire(uint8_t module, uint8_t*& p_buf,
     // - internal non-recoverable error
     // - after flashing in WiFi mode
     // - putting the module in WiFi mode and exiting WiFi mode (LUA script)
-    // 
-    // This logic takes care of sending the modelID again after a module comes back to 
+    //
+    // This logic takes care of sending the modelID again after a module comes back to
     // live after a module reset
-    // 
+    //
     if(moduleState[module].counter != CRSF_FRAME_MODELID ) {            // skip the reset check logic if first init
-      if((get_tmr10ms() - lastAlive[module]) > MODULE_ALIVE_TIMEOUT) {  // check if module has recently sent CRSF frames 
-        moduleAlive[module] = false;                                    // no, declare it as dead  
+      if((get_tmr10ms() - lastAlive[module]) > MODULE_ALIVE_TIMEOUT) {  // check if module has recently sent CRSF frames
+        moduleAlive[module] = false;                                    // no, declare it as dead
       } else {
         if(moduleAlive[module] == false) {                              // if the module was dead and came back to live, e.g. reset
           moduleAlive[module] = true;                                   // declare the module as alive
-          moduleState[module].counter = CRSF_FRAME_MODELID;             // and send it the modelID again 
+          moduleState[module].counter = CRSF_FRAME_MODELID;             // and send it the modelID again
         }
       }
     }
 
     if (moduleState[module].counter == CRSF_FRAME_MODELID) {
       TRACE("[XF] ModelID %d", g_model.header.modelId[module]);
-      p_buf += createCrossfireModelIDFrame(module, p_buf);
+      p_buf += createCrossfireModelIDFrame(module, p_buf, endpoint);
       moduleState[module].counter = CRSF_FRAME_MODELID_SENT;
     } else if (moduleState[module].counter == CRSF_FRAME_MODELID_SENT && crossfireModuleStatus[module].queryCompleted == false) {
       p_buf += createCrossfirePingFrame(module, p_buf);
@@ -197,7 +211,7 @@ static void setupPulsesCrossfire(uint8_t module, uint8_t*& p_buf,
       moduleState[module].mode = MODULE_MODE_NORMAL;
     } else {
       /* TODO: nChannels */
-      p_buf += createCrossfireChannelsFrame(module, p_buf, channels);
+      p_buf += createCrossfireChannelsFrame(module, p_buf, channels, endpoint);
     }
   }
 }
@@ -226,7 +240,7 @@ static void crossfireSendPulses(void* ctx, uint8_t* buffer, int16_t* channels, u
   auto module = modulePortGetModule(mod_st);
   crossfireSetupMixerScheduler(module);
 
-  uint8_t endpoint = 0;  
+  uint8_t endpoint = 0;
 #if defined(HARDWARE_EXTERNAL_MODULE)
   if (module == EXTERNAL_MODULE) endpoint = TELEMETRY_ENDPOINT_SPORT;
 #endif
@@ -235,7 +249,9 @@ static void crossfireSendPulses(void* ctx, uint8_t* buffer, int16_t* channels, u
 
   auto drv = modulePortGetSerialDrv(mod_st->tx);
   auto drv_ctx = modulePortGetCtx(mod_st->tx);
-  drv->sendBuffer(drv_ctx, buffer, p_buf - buffer);
+  if (drv && drv_ctx && drv->sendBuffer) {
+    drv->sendBuffer(drv_ctx, buffer, p_buf - buffer);
+  }
 }
 
 static bool _lenIsSane(uint32_t len)
@@ -292,7 +308,7 @@ static uint8_t* _processFrames(void* ctx, uint8_t* buf, uint8_t& len)
     p_buf += pkt_len;
     len -= pkt_len;
   }
-  
+
   return p_buf;
 }
 
@@ -357,6 +373,11 @@ static void _crsf_intmodule_frame_received(void*)
 #endif
 
 #if defined(HARDWARE_EXTERNAL_MODULE)
+static void _crsf_extmodule_full_frame_received(void*)
+{
+  telemetryFrameTrigger_ISR(EXTERNAL_MODULE, &CrossfireDriver);
+}
+
 static void _crsf_extmodule_frame_received()
 {
   telemetryFrameTrigger_ISR(EXTERNAL_MODULE, &CrossfireDriver);
@@ -413,28 +434,46 @@ static void* crossfireInit(uint8_t module)
 #if defined(HARDWARE_EXTERNAL_MODULE)
   if (module == EXTERNAL_MODULE) {
     params.baudrate = EXT_CROSSFIRE_BAUDRATE;
-    mod_st = modulePortInitSerial(module, ETX_MOD_PORT_SPORT, &params, false);
+    if (isModuleCrossfireFull(module)) {
+      mod_st = modulePortInitSerial(module, ETX_MOD_PORT_UART, &params, false);
 
-    if (mod_st) {
-      auto drv = modulePortGetSerialDrv(mod_st->rx);
-      auto ctx = modulePortGetCtx(mod_st->rx);
+      if (mod_st) {
+        auto drv = modulePortGetSerialDrv(mod_st->rx);
+        auto ctx = modulePortGetCtx(mod_st->rx);
 
-      auto& rx_count = getTelemetryRxBufferCount(EXTERNAL_MODULE);
-      rx_count = 0;
+        auto& rx_count = getTelemetryRxBufferCount(EXTERNAL_MODULE);
+        rx_count = 0;
 
 #if !defined(SIMU)
-      if (drv && ctx && drv->setIdleCb) {
-        drv->setIdleCb(ctx, _soft_irq_trigger, &mod_st->rx);
+        if (drv && ctx && drv->setIdleCb) {
+          drv->setIdleCb(ctx, _crsf_extmodule_full_frame_received, nullptr);
+        }
+#endif
+      }
+    } else {
+      mod_st = modulePortInitSerial(module, ETX_MOD_PORT_SPORT, &params, false);
+
+      if (mod_st) {
+        auto drv = modulePortGetSerialDrv(mod_st->rx);
+        auto ctx = modulePortGetCtx(mod_st->rx);
+
+        auto& rx_count = getTelemetryRxBufferCount(EXTERNAL_MODULE);
+        rx_count = 0;
+
+#if !defined(SIMU)
+        if (drv && ctx && drv->setIdleCb) {
+          drv->setIdleCb(ctx, _soft_irq_trigger, &mod_st->rx);
 #if defined(TELEMETRY_USE_CUSTOM_EXTI)
-        stm32_exti_custom_enable(TELEMETRY_RX_FRAME_EXTI_LINE, 3,
-                          _crsf_extmodule_frame_received);
+          stm32_exti_custom_enable(TELEMETRY_RX_FRAME_EXTI_LINE, 3,
+                            _crsf_extmodule_frame_received);
 #else
-        stm32_exti_enable(TELEMETRY_RX_FRAME_EXTI_LINE, 0,
-                          _crsf_extmodule_frame_received);
+          stm32_exti_enable(TELEMETRY_RX_FRAME_EXTI_LINE, 0,
+                            _crsf_extmodule_frame_received);
 #endif
 
-      }
+        }
 #endif
+      }
     }
 
     memset(&crossfireModuleStatus[module], 0, sizeof(crossfireModuleStatus[module]));
@@ -457,14 +496,22 @@ static void crossfireDeInit(void* ctx)
 
 #if !defined(SIMU) && defined(HARDWARE_EXTERNAL_MODULE)
   if (mod_st && (modulePortGetModule(mod_st) == EXTERNAL_MODULE)) {
-    auto drv = modulePortGetSerialDrv(mod_st->rx);
-    auto ctx = modulePortGetCtx(mod_st->rx);
-    if (drv && ctx && drv->setIdleCb) {
+    if (isModuleCrossfireFull(EXTERNAL_MODULE)) {
+      auto drv = modulePortGetSerialDrv(mod_st->rx);
+      auto ctx = modulePortGetCtx(mod_st->rx);
+      if (drv && ctx && drv->setIdleCb) {
+        drv->setIdleCb(ctx, nullptr, nullptr);
+      }
+    } else {
+      auto drv = modulePortGetSerialDrv(mod_st->rx);
+      auto ctx = modulePortGetCtx(mod_st->rx);
+      if (drv && ctx && drv->setIdleCb) {
 #if defined(TELEMETRY_USE_CUSTOM_EXTI)
-      stm32_exti_custom_disable(TELEMETRY_RX_FRAME_EXTI_LINE);
+        stm32_exti_custom_disable(TELEMETRY_RX_FRAME_EXTI_LINE);
 #else
-     stm32_exti_disable(TELEMETRY_RX_FRAME_EXTI_LINE);
+        stm32_exti_disable(TELEMETRY_RX_FRAME_EXTI_LINE);
 #endif
+      }
     }
   }
 #endif
@@ -482,3 +529,104 @@ const etx_proto_driver_t CrossfireDriver = {
   .onConfigChange = nullptr,
   .txCompleted = modulePortSerialTxCompleted,
 };
+
+#if defined(HARDWARE_EXTERNAL_MODULE)
+static void* crossfireSportInit(uint8_t module)
+{
+  if (module != EXTERNAL_MODULE) return nullptr;
+
+  etx_serial_init params(crsfSerialParams);
+  if (isModuleCrossfireFull(EXTERNAL_MODULE)) {
+    params.baudrate = CROSSFIRE_BAUDRATES[CROSSFIRE_STORE_TO_INDEX(g_model.moduleData[EXTERNAL_MODULE].crsf.jrUartTelemetryBaudrate)];
+  } else {
+    params.baudrate = EXT_CROSSFIRE_BAUDRATE;
+  }
+  auto mod_st = modulePortInitSerial(module, ETX_MOD_PORT_SPORT, &params, false);
+
+  if (mod_st) {
+    auto drv = modulePortGetSerialDrv(mod_st->sport);
+    auto ctx = modulePortGetCtx(mod_st->sport);
+
+    auto& rx_count = getTelemetryRxBufferCount(EXTERNAL_MODULE);
+    rx_count = 0;
+
+#if !defined(SIMU)
+    if (drv && ctx && drv->setIdleCb) {
+      drv->setIdleCb(ctx, _soft_irq_trigger, &mod_st->sport);
+#if defined(TELEMETRY_USE_CUSTOM_EXTI)
+      stm32_exti_custom_enable(TELEMETRY_RX_FRAME_EXTI_LINE, 3,
+                               _crsf_extmodule_frame_received);
+#else
+      stm32_exti_enable(TELEMETRY_RX_FRAME_EXTI_LINE, 0,
+                        _crsf_extmodule_frame_received);
+#endif
+    }
+#endif
+  }
+
+  return (void*)mod_st;
+}
+
+static void crossfireSportSendPulses(void* ctx, uint8_t* buffer, int16_t* channels, uint8_t nChannels)
+{
+  auto mod_st = (etx_module_state_t*)ctx;
+  crossfireSetupMixerScheduler(EXTERNAL_MODULE);
+
+  uint8_t endpoint = TELEMETRY_ENDPOINT_SPORT;
+  auto p_buf = buffer;
+  setupPulsesCrossfire(EXTERNAL_MODULE, p_buf, endpoint, channels, nChannels);
+
+  if (mod_st && mod_st->sport.port) {
+    auto drv = modulePortGetSerialDrv(mod_st->sport);
+    auto drv_ctx = modulePortGetCtx(mod_st->sport);
+    if (drv && drv_ctx && drv->sendBuffer) {
+      drv->sendBuffer(drv_ctx, buffer, p_buf - buffer);
+    }
+  }
+}
+
+static bool crossfireSportTxCompleted(void* ctx)
+{
+  auto mod_st = (etx_module_state_t*)ctx;
+  if (!mod_st || !mod_st->sport.port) return true;
+  auto drv = modulePortGetSerialDrv(mod_st->sport);
+  auto drv_ctx = modulePortGetCtx(mod_st->sport);
+  return drv ? drv->txCompleted(drv_ctx) : true;
+}
+
+static void crossfireSportDeInit(void* ctx)
+{
+  auto mod_st = (etx_module_state_t*)ctx;
+#if !defined(SIMU)
+  if (mod_st && mod_st->sport.port) {
+    auto drv = modulePortGetSerialDrv(mod_st->sport);
+    auto drv_ctx = modulePortGetCtx(mod_st->sport);
+    if (drv && drv_ctx && drv->setIdleCb) {
+#if defined(TELEMETRY_USE_CUSTOM_EXTI)
+      stm32_exti_custom_disable(TELEMETRY_RX_FRAME_EXTI_LINE);
+#else
+      stm32_exti_disable(TELEMETRY_RX_FRAME_EXTI_LINE);
+#endif
+    }
+    auto p = mod_st->sport.port;
+    if (p->type == ETX_MOD_TYPE_SERIAL && p->drv.serial) {
+      p->drv.serial->deinit(mod_st->sport.ctx);
+    }
+    memset(&mod_st->sport, 0, sizeof(etx_module_driver_t));
+  }
+#else
+  (void)mod_st;
+#endif
+}
+
+const etx_proto_driver_t CrossfireSportDriver = {
+  .protocol = PROTOCOL_CHANNELS_CROSSFIRE,
+  .init = crossfireSportInit,
+  .deinit = crossfireSportDeInit,
+  .sendPulses = crossfireSportSendPulses,
+  .processData = nullptr,
+  .processFrame = crossfireProcessFrame,
+  .onConfigChange = nullptr,
+  .txCompleted = crossfireSportTxCompleted,
+};
+#endif

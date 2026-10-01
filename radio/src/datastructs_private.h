@@ -512,6 +512,8 @@ PACK(struct ModuleData {
   int8_t  channelsCount CUST(r_channelsCount,w_channelsCount); // 0=8 channels
   uint8_t failsafeMode:4 ENUM(FailsafeModes);  // only 3 bits used
   uint8_t subType:4 SKIP;
+  uint8_t sportPinMode:3 ENUM(ModuleSportPinMode);
+  uint8_t spare:5 SKIP;
 
   union {
     uint8_t raw[PXX2_MAX_RECEIVERS_PER_MODULE * PXX2_LEN_RX_NAME + 1];
@@ -574,11 +576,16 @@ PACK(struct ModuleData {
       uint8_t spare1:4 SKIP;
     } ghost);
     NOBACKUP(PACK(struct {
-      uint8_t telemetryBaudrate:3;
-      uint8_t crsfArmingMode:1;
-      uint8_t spare2:4 SKIP;
+      uint16_t telemetryBaudrate:3;
+      uint16_t crsfArmingMode:1;
+      uint16_t jrUartArmingMode:1;
+      uint16_t jrUartChannelsStart:5;
+      uint16_t jrUartModelId:6;
       int16_t crsfArmingTrigger:10 CUST(r_swtchSrc,w_swtchSrc);
-      int16_t spare3:6;
+      int16_t jrUartArmingTrigger:10 CUST(r_swtchSrc,w_swtchSrc);
+      uint16_t jrUartTelemetryBaudrate:3;
+      int16_t jrUartChannelsCount:6;
+      int16_t spare3:3 SKIP;
     }) crsf);
     NOBACKUP(struct {
       uint8_t flags;

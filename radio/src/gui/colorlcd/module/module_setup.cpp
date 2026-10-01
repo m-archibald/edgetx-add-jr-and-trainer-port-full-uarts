@@ -131,7 +131,9 @@ class ModuleWindow : public Window
 
     modOpts = nullptr;
     chRange = nullptr;
+    sportChRange = nullptr;
     rxID = nullptr;
+    sportRxID = nullptr;
     bindButton = nullptr;
     rangeButton = nullptr;
     registerButton = nullptr;
@@ -144,6 +146,9 @@ class ModuleWindow : public Window
 
     if (md->type == MODULE_TYPE_NONE) {
       return;
+    }
+
+    if (false) {
     }
   #if defined(CROSSFIRE)
     else if (isModuleCrossfire(moduleIdx)) {
@@ -184,10 +189,11 @@ class ModuleWindow : public Window
     }
   #endif
 
-    // Channel Range
-    auto line = newLine(grid);
-    new StaticText(line, rect_t{}, STR_CHANNELRANGE);
-    chRange = new ModuleChannelRange(line, moduleIdx);
+    if (!isModuleLua(moduleIdx)) {
+      // Channel Range
+      auto line = newLine(grid);
+      new StaticText(line, rect_t{}, STR_CHANNELRANGE);
+      chRange = new ModuleChannelRange(line, moduleIdx);
 
     // Failsafe
     fsLine = newLine(grid);
@@ -208,8 +214,8 @@ class ModuleWindow : public Window
     // Generic module parameters
 
     // Bind and Range buttons
-    if (!isModuleRFAccess(moduleIdx) && (isModuleModelIndexAvailable(moduleIdx) ||
-                                        isModuleBindRangeAvailable(moduleIdx))) {
+    if (!isModuleRFAccess(moduleIdx) &&
+        (isModuleModelIndexAvailable(moduleIdx) || isModuleBindRangeAvailable(moduleIdx))) {
       // Is Reciever ID Unique
       if (isModuleModelIndexAvailable(moduleIdx)) {
         auto line = newLine(grid);
@@ -235,12 +241,12 @@ class ModuleWindow : public Window
                                 *modelId = newValue;
                                 modelCellManager.updateCurrentModelCell();
                                 updateIDStaticText(moduleIdx);
-  #if defined(CROSSFIRE)
+#if defined(CROSSFIRE)
                                 if (isModuleCrossfire(moduleIdx)) {
                                   moduleState[moduleIdx].counter =
                                       CRSF_FRAME_MODELID;
                                 }
-  #endif
+#endif
                                 SET_DIRTY();
                               }
                             });
@@ -419,6 +425,7 @@ class ModuleWindow : public Window
       }
     }
   #endif
+    } // !isModuleLua(moduleIdx)
     // SBUS refresh rate
     if (isModuleSBUS(moduleIdx)) {
       auto line = newLine(grid);
@@ -450,6 +457,146 @@ class ModuleWindow : public Window
       new ToggleSwitch(line, rect_t{}, GET_SET_DEFAULT(md->ghost.raw12bits));
     }
 
+    if (moduleIdx == EXTERNAL_MODULE &&
+        (isModuleCrossfireFull(moduleIdx) || isModuleLua(moduleIdx))) {
+      auto line = newLine(grid);
+      new StaticText(line, rect_t{}, STR_SPORT_PIN_MODE);
+      new Choice(line, rect_t{}, STR_SPORT_PIN_MODES, 0, SPORT_PIN_MODE_MAX,
+                 GET_DEFAULT(md->sportPinMode), [=](int32_t newValue) {
+                   md->sportPinMode = newValue;
+                   restartModule(EXTERNAL_MODULE);
+                   SET_DIRTY();
+                   updateModule();
+                 });
+
+      if (md->sportPinMode == SPORT_PIN_MODE_CRSF) {
+        if (isModuleCrossfireFull(EXTERNAL_MODULE)) {
+          auto brLine = newLine(grid);
+          new StaticText(brLine, rect_t{}, STR_BAUDRATE);
+          new Choice(
+              brLine, rect_t{}, STR_CRSF_BAUDRATE, 0, CROSSFIRE_MAX_EXTERNAL_BAUDRATE,
+              [=]() -> int {
+                return CROSSFIRE_STORE_TO_INDEX(md->crsf.jrUartTelemetryBaudrate);
+              },
+              [=](int newValue) {
+                md->crsf.jrUartTelemetryBaudrate = CROSSFIRE_INDEX_TO_STORE(newValue);
+                SET_DIRTY();
+                restartModule(EXTERNAL_MODULE);
+              });
+
+          auto stLine = newLine(grid);
+          new StaticText(stLine, rect_t{}, STR_STATUS);
+          new DynamicText(stLine, rect_t{}, [=] {
+            char msg[64] = "";
+            sprintf(msg, "%d Hz", 1000000 / getMixerSchedulerPeriod());
+            return std::string(msg);
+          });
+
+          if (CRSF_ELRS_MIN_VER(EXTERNAL_MODULE, 4, 0)) {
+            auto armingLine = newLine(grid);
+            new StaticText(armingLine, rect_t{}, STR_CRSF_ARMING_MODE);
+            auto box = new Window(armingLine, rect_t{});
+            box->padAll(PAD_TINY);
+            box->setFlexLayout(LV_FLEX_FLOW_ROW, PAD_SMALL);
+            new Choice(box, rect_t{}, STR_CRSF_ARMING_MODES, 0, 1, GET_SET_DEFAULT(md->crsf.jrUartArmingMode));
+            auto choArmSwitch = new SwitchChoice(box, rect_t{}, SWSRC_FIRST, SWSRC_LAST, GET_SET_DEFAULT(md->crsf.jrUartArmingTrigger));
+            choArmSwitch->setAvailableHandler([=](int sw) { return isSwitchAvailableForArming(sw); });
+            choArmSwitch->show(md->crsf.jrUartArmingMode == ARMING_MODE_SWITCH);
+          }
+
+          auto crLine = newLine(grid);
+          new StaticText(crLine, rect_t{}, STR_CHANNELRANGE);
+          sportChRange = new ModuleChannelRange(crLine, EXTERNAL_MODULE, true);
+
+          auto rxLine = newLine(grid);
+          new StaticText(rxLine, rect_t{}, STR_RECEIVER);
+          auto box = new Window(rxLine, rect_t{});
+          box->padAll(PAD_TINY);
+          box->setFlexLayout(LV_FLEX_FLOW_ROW, PAD_MEDIUM, LV_SIZE_CONTENT);
+          sportRxID = new NumberEdit(box, {0, 0, EdgeTxStyles::EDIT_FLD_WIDTH_NARROW, 0}, 0, 63,
+                                GET_DEFAULT(md->crsf.jrUartModelId), [=](int32_t newValue) {
+                                  if (newValue != md->crsf.jrUartModelId) {
+                                    md->crsf.jrUartModelId = newValue;
+                                    modelCellManager.updateCurrentModelCell();
+                                    moduleState[EXTERNAL_MODULE].counter = CRSF_FRAME_MODELID;
+                                    SET_DIRTY();
+                                  }
+                                });
+
+          auto bindBtn = new TextButton(box, rect_t{}, STR_MODULE_BIND);
+          bindBtn->setPressHandler([=]() -> uint8_t {
+            moduleState[EXTERNAL_MODULE].mode = MODULE_MODE_BIND;
+            AUDIO_PLAY(AU_SPECIAL_SOUND_CHEEP);
+            return 1;
+          });
+        } else if (isModuleLua(EXTERNAL_MODULE)) {
+          auto brLine = newLine(grid);
+          new StaticText(brLine, rect_t{}, STR_BAUDRATE);
+          new Choice(
+              brLine, rect_t{}, STR_CRSF_BAUDRATE, 0, CROSSFIRE_MAX_EXTERNAL_BAUDRATE,
+              [=]() -> int {
+                return CROSSFIRE_STORE_TO_INDEX(md->crsf.telemetryBaudrate);
+              },
+              [=](int newValue) {
+                md->crsf.telemetryBaudrate = CROSSFIRE_INDEX_TO_STORE(newValue);
+                SET_DIRTY();
+                restartModule(EXTERNAL_MODULE);
+              });
+
+          auto stLine = newLine(grid);
+          new StaticText(stLine, rect_t{}, STR_STATUS);
+          new DynamicText(stLine, rect_t{}, [=] {
+            char msg[64] = "";
+            sprintf(msg, "%d Hz", 1000000 / getMixerSchedulerPeriod());
+            return std::string(msg);
+          });
+
+          if (CRSF_ELRS_MIN_VER(EXTERNAL_MODULE, 4, 0)) {
+            auto armingLine = newLine(grid);
+            new StaticText(armingLine, rect_t{}, STR_CRSF_ARMING_MODE);
+            auto box = new Window(armingLine, rect_t{});
+            box->padAll(PAD_TINY);
+            box->setFlexLayout(LV_FLEX_FLOW_ROW, PAD_SMALL);
+            new Choice(box, rect_t{}, STR_CRSF_ARMING_MODES, 0, 1, GET_SET_DEFAULT(md->crsf.crsfArmingMode));
+            auto choArmSwitch = new SwitchChoice(box, rect_t{}, SWSRC_FIRST, SWSRC_LAST, GET_SET_DEFAULT(md->crsf.crsfArmingTrigger));
+            choArmSwitch->setAvailableHandler([=](int sw) { return isSwitchAvailableForArming(sw); });
+            choArmSwitch->show(md->crsf.crsfArmingMode == ARMING_MODE_SWITCH);
+          }
+
+          auto crLine = newLine(grid);
+          new StaticText(crLine, rect_t{}, STR_CHANNELRANGE);
+          sportChRange = new ModuleChannelRange(crLine, EXTERNAL_MODULE, false);
+
+          auto rxLine = newLine(grid);
+          new StaticText(rxLine, rect_t{}, STR_RECEIVER);
+          auto box = new Window(rxLine, rect_t{});
+          box->padAll(PAD_TINY);
+          box->setFlexLayout(LV_FLEX_FLOW_ROW, PAD_MEDIUM, LV_SIZE_CONTENT);
+          auto modelId = &g_model.header.modelId[EXTERNAL_MODULE];
+          sportRxID = new NumberEdit(box, {0, 0, EdgeTxStyles::EDIT_FLD_WIDTH_NARROW, 0}, 0, getMaxRxNum(EXTERNAL_MODULE),
+                                GET_DEFAULT(*modelId), [=](int32_t newValue) {
+                                  if (newValue != *modelId) {
+                                    *modelId = newValue;
+                                    modelCellManager.updateCurrentModelCell();
+                                    moduleState[EXTERNAL_MODULE].counter = CRSF_FRAME_MODELID;
+                                    SET_DIRTY();
+                                  }
+                                });
+
+          auto bindBtn = new TextButton(box, rect_t{}, STR_MODULE_BIND);
+          bindBtn->setPressHandler([=]() -> uint8_t {
+            moduleState[EXTERNAL_MODULE].mode = MODULE_MODE_BIND;
+            AUDIO_PLAY(AU_SPECIAL_SOUND_CHEEP);
+            return 1;
+          });
+        }
+      } else if (md->sportPinMode == SPORT_PIN_MODE_SBUS) {
+        auto crLine = newLine(grid);
+        new StaticText(crLine, rect_t{}, STR_CHANNELRANGE);
+        sportChRange = new ModuleChannelRange(crLine, EXTERNAL_MODULE, isModuleCrossfireFull(EXTERNAL_MODULE));
+      }
+    }
+
     updateSubType();
   }
 
@@ -457,6 +604,7 @@ class ModuleWindow : public Window
   {
     if (modOpts) modOpts->update();
     if (chRange) chRange->update();
+    if (sportChRange) sportChRange->update();
 
     updateRxID();
     updateFailsafe();
@@ -482,6 +630,9 @@ class ModuleWindow : public Window
       } else {
         rxID->hide();
       }
+    }
+    if (sportRxID) {
+      sportRxID->update();
     }
   }
 
@@ -514,7 +665,9 @@ class ModuleWindow : public Window
 
   ModuleOptions* modOpts = nullptr;
   ChannelRange* chRange = nullptr;
+  ChannelRange* sportChRange = nullptr;
   NumberEdit* rxID = nullptr;
+  NumberEdit* sportRxID = nullptr;
   TextButton* bindButton = nullptr;
   TextButton* rangeButton = nullptr;
   TextButton* registerButton = nullptr;

@@ -1195,7 +1195,12 @@ When called without parameters, it will only return the status of the output buf
 static int luaCrossfireTelemetryPush(lua_State* L)
 {
   bool external =
-      (moduleState[EXTERNAL_MODULE].protocol == PROTOCOL_CHANNELS_CROSSFIRE);
+      (moduleState[EXTERNAL_MODULE].protocol == PROTOCOL_CHANNELS_CROSSFIRE)
+#if defined(LUA) && defined(EXTMODULE_USART)
+      || (isModuleLua(EXTERNAL_MODULE) &&
+          g_model.moduleData[EXTERNAL_MODULE].sportPinMode == SPORT_PIN_MODE_CRSF)
+#endif
+      ;
   bool internal =
       (moduleState[INTERNAL_MODULE].protocol == PROTOCOL_CHANNELS_CROSSFIRE);
 

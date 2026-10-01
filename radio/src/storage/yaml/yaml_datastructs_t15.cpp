@@ -38,6 +38,8 @@ const struct YamlIdStr enum_ModuleType[] = {
   {  MODULE_TYPE_FLYSKY_AFHDS2A, "TYPE_FLYSKY_AFHDS2A"  },
   {  MODULE_TYPE_FLYSKY_AFHDS3, "TYPE_FLYSKY_AFHDS3"  },
   {  MODULE_TYPE_LEMON_DSMP, "TYPE_LEMON_DSMP"  },
+  {  MODULE_TYPE_CRSF_FULL, "TYPE_CRSF_FULL"  },
+  {  MODULE_TYPE_LUA, "TYPE_LUA"  },
   {  0, NULL  }
 };
 const struct YamlIdStr enum_TrainerMultiplex[] = {
@@ -242,6 +244,15 @@ const struct YamlIdStr enum_FailsafeModes[] = {
   {  FAILSAFE_CUSTOM, "CUSTOM"  },
   {  FAILSAFE_NOPULSES, "NOPULSES"  },
   {  FAILSAFE_RECEIVER, "RECEIVER"  },
+  {  0, NULL  }
+};
+const struct YamlIdStr enum_ModuleSportPinMode[] = {
+  {  SPORT_PIN_MODE_CRSF, "PIN_MODE_CRSF"  },
+  {  SPORT_PIN_MODE_GHOST, "PIN_MODE_GHOST"  },
+  {  SPORT_PIN_MODE_PXX1, "PIN_MODE_PXX1"  },
+  {  SPORT_PIN_MODE_SBUS, "PIN_MODE_SBUS"  },
+  {  SPORT_PIN_MODE_TELEM_MIRROR, "PIN_MODE_TELEM_MIRROR"  },
+  {  SPORT_PIN_MODE_OFF, "PIN_MODE_OFF"  },
   {  0, NULL  }
 };
 const struct YamlIdStr enum_TelemetrySensorFormula[] = {
@@ -714,9 +725,14 @@ static const struct YamlNode struct_anonymous_11[] = {
 static const struct YamlNode struct_anonymous_12[] = {
   YAML_UNSIGNED( "telemetryBaudrate", 3 ),
   YAML_UNSIGNED( "crsfArmingMode", 1 ),
-  YAML_PADDING( 4 ),
+  YAML_UNSIGNED( "jrUartArmingMode", 1 ),
+  YAML_UNSIGNED( "jrUartChannelsStart", 5 ),
+  YAML_UNSIGNED( "jrUartModelId", 6 ),
   YAML_SIGNED_CUST( "crsfArmingTrigger", 10, r_swtchSrc, w_swtchSrc ),
-  YAML_SIGNED( "spare3", 6 ),
+  YAML_SIGNED_CUST( "jrUartArmingTrigger", 10, r_swtchSrc, w_swtchSrc ),
+  YAML_UNSIGNED( "jrUartTelemetryBaudrate", 3 ),
+  YAML_SIGNED( "jrUartChannelsCount", 6 ),
+  YAML_PADDING( 3 ),
   YAML_END
 };
 static const struct YamlNode struct_anonymous_13[] = {
@@ -734,7 +750,7 @@ static const struct YamlNode union_anonymous_4_elmts[] = {
   YAML_STRUCT("flysky", 56, struct_anonymous_9, NULL),
   YAML_STRUCT("afhds3", 16, struct_anonymous_10, NULL),
   YAML_STRUCT("ghost", 8, struct_anonymous_11, NULL),
-  YAML_STRUCT("crsf", 24, struct_anonymous_12, NULL),
+  YAML_STRUCT("crsf", 48, struct_anonymous_12, NULL),
   YAML_STRUCT("dsmp", 16, struct_anonymous_13, NULL),
   YAML_END
 };
@@ -747,6 +763,8 @@ static const struct YamlNode struct_ModuleData[] = {
   YAML_SIGNED_CUST( "channelsCount", 8, r_channelsCount, w_channelsCount ),
   YAML_ENUM("failsafeMode", 4, enum_FailsafeModes, NULL),
   YAML_PADDING( 4 ),
+  YAML_ENUM("sportPinMode", 3, enum_ModuleSportPinMode, NULL),
+  YAML_PADDING( 5 ),
   YAML_UNION("mod", 200, union_anonymous_4_elmts, select_mod_type),
   YAML_END
 };
@@ -972,7 +990,7 @@ static const struct YamlNode struct_ModelData[] = {
   YAML_ENUM("potsWarnMode", 2, enum_PotsWarnMode, NULL),
   YAML_ENUM("jitterFilter", 2, enum_ModelOverridableEnable, NULL),
   YAML_PADDING( 1 ),
-  YAML_ARRAY("moduleData", 232, 2, struct_ModuleData, NULL),
+  YAML_ARRAY("moduleData", 240, 2, struct_ModuleData, NULL),
   YAML_ARRAY("failsafeChannels", 16, 32, struct_signed_16, NULL),
   YAML_STRUCT("trainerData", 40, struct_TrainerModuleData, NULL),
   YAML_ARRAY("scriptsData", 192, 9, struct_ScriptData, NULL),
@@ -1014,7 +1032,7 @@ static const struct YamlNode struct_ModelData[] = {
 static const struct YamlNode struct_PartialModel[] = {
   YAML_CUSTOM("semver",nullptr,w_semver),
   YAML_STRUCT("header", 1048, struct_ModelHeader, NULL),
-  YAML_ARRAY("moduleData", 232, 2, struct_ModuleData, NULL),
+  YAML_ARRAY("moduleData", 240, 2, struct_ModuleData, NULL),
   YAML_END
 };
 

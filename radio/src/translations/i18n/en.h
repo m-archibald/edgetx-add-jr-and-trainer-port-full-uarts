@@ -913,6 +913,7 @@
 #define TR_INTERNALRF                  "Internal RF"
 #define TR_INTERNAL_MODULE             TR("Int. module", "Internal module")
 #define TR_EXTERNAL_MODULE             TR("Ext. module", "External module")
+#define TR_SPORT_PIN_MODE              TR("S.Port Pin", "S.Port Pin Function")
 #define TR_EDGETX_UPGRADE_REQUIRED     "EdgeTX upgrade required"
 #define TR_TELEMETRY_DISABLED          "Telem. disabled"
 #define TR_MORE_OPTIONS_AVAILABLE      "More options available"

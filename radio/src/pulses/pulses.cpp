@@ -73,12 +73,57 @@
 #include "pulses/afhds3.h"
 #endif
 
+#if defined(LUA)
+#include "pulses/lua_module.h"
+#endif
+
+#include "pulses/modules_helpers.h"
+
 static module_pulse_driver _module_drivers[MAX_MODULES];
 static module_pulse_buffer _module_buffers[MAX_MODULES] __DMA_NO_CACHE;
+
+#if defined(HARDWARE_EXTERNAL_MODULE)
+static module_pulse_driver _extmodule_sport_driver;
+static module_pulse_buffer _extmodule_sport_buffer __DMA_NO_CACHE;
+
+static void _deinit_extmodule_sport()
+{
+  if (_extmodule_sport_driver.drv) {
+    if (_extmodule_sport_driver.drv->deinit) {
+      _extmodule_sport_driver.drv->deinit(_extmodule_sport_driver.ctx);
+    }
+    memset(&_extmodule_sport_driver, 0, sizeof(module_pulse_driver));
+  }
+}
+
+static void _init_extmodule_sport()
+{
+  _deinit_extmodule_sport();
+
+  if (!isModuleCrossfireFull(EXTERNAL_MODULE) && !isModuleLua(EXTERNAL_MODULE)) {
+    return;
+  }
+
+  uint8_t sportMode = g_model.moduleData[EXTERNAL_MODULE].sportPinMode;
+  switch (sportMode) {
+#if defined(CROSSFIRE)
+    case SPORT_PIN_MODE_CRSF:
+      _extmodule_sport_driver.drv = &CrossfireSportDriver;
+      _extmodule_sport_driver.ctx = CrossfireSportDriver.init(EXTERNAL_MODULE);
+      break;
+#endif
+    default:
+      break;
+  }
+}
+#endif
 
 void pulsesInit()
 {
   memset(_module_drivers, 0, sizeof(_module_drivers));
+#if defined(HARDWARE_EXTERNAL_MODULE)
+  memset(&_extmodule_sport_driver, 0, sizeof(_extmodule_sport_driver));
+#endif
 }
 
 module_pulse_driver* pulsesGetModuleDriver(uint8_t module)
@@ -326,7 +371,14 @@ uint8_t getRequiredProtocol(uint8_t module)
 
 #if defined(CROSSFIRE)
     case MODULE_TYPE_CROSSFIRE:
+    case MODULE_TYPE_CRSF_FULL:
       protocol = PROTOCOL_CHANNELS_CROSSFIRE;
+      break;
+#endif
+
+#if defined(LUA)
+    case MODULE_TYPE_LUA:
+      protocol = PROTOCOL_CHANNELS_LUA;
       break;
 #endif
 
@@ -398,6 +450,12 @@ static void _init_module(uint8_t module, const etx_proto_driver_t* drv)
 
 static void _deinit_module(uint8_t module)
 {
+#if defined(HARDWARE_EXTERNAL_MODULE)
+  if (module == EXTERNAL_MODULE) {
+    _deinit_extmodule_sport();
+  }
+#endif
+
   auto mod = &(_module_drivers[module]);
   if (!mod->drv) return;
 
@@ -462,6 +520,12 @@ static void pulsesEnableModule(uint8_t module, uint8_t protocol)
       break;
 #endif
 
+#if defined(LUA)
+    case PROTOCOL_CHANNELS_LUA:
+      _init_module(module, &LuaModuleDriver);
+      break;
+#endif
+
 #if defined(GHOST)
     case PROTOCOL_CHANNELS_GHOST:
       _init_module(module, &GhostDriver);
@@ -495,6 +559,12 @@ static void pulsesEnableModule(uint8_t module, uint8_t protocol)
     default:
       break;
   }
+
+#if defined(HARDWARE_EXTERNAL_MODULE)
+  if (module == EXTERNAL_MODULE) {
+    _init_extmodule_sport();
+  }
+#endif
 }
 
 // TODO: declare a function in telemetry
@@ -565,15 +635,41 @@ void pulsesSendNextFrame(uint8_t module)
     }
 
     // if previous frame not completed, skip this one
-    if (drv->txCompleted && !drv->txCompleted(ctx)) return;
+    if (!drv->txCompleted || drv->txCompleted(ctx)) {
+      if (drv->sendPulses) {
+        uint8_t channelStart = g_model.moduleData[module].channelsStart;
+        uint8_t nChannels = 16;
+        int16_t* channels = &channelOutputs[channelStart];
 
-    uint8_t channelStart = g_model.moduleData[module].channelsStart;
-    int16_t* channels = &channelOutputs[channelStart];
-    uint8_t nChannels = 16;  // TODO: MAX_CHANNELS - channelsStart
-
-    auto buffer = _module_buffers[module]._buffer;
-    drv->sendPulses(ctx, buffer, channels, nChannels);
+        auto buffer = _module_buffers[module]._buffer;
+        drv->sendPulses(ctx, buffer, channels, nChannels);
+      }
+    }
   }
+
+#if defined(HARDWARE_EXTERNAL_MODULE)
+  if (module == EXTERNAL_MODULE && _extmodule_sport_driver.drv) {
+    auto sdrv = _extmodule_sport_driver.drv;
+    auto sctx = _extmodule_sport_driver.ctx;
+
+    if (!sdrv->txCompleted || sdrv->txCompleted(sctx)) {
+      if (sdrv->sendPulses) {
+        uint8_t channelStart = g_model.moduleData[EXTERNAL_MODULE].channelsStart;
+        uint8_t nChannels = 16;
+        if (isModuleCrossfireFull(EXTERNAL_MODULE)) {
+          channelStart = g_model.moduleData[EXTERNAL_MODULE].crsf.jrUartChannelsStart;
+          if (g_model.moduleData[EXTERNAL_MODULE].crsf.jrUartChannelsCount != 0) {
+            nChannels = g_model.moduleData[EXTERNAL_MODULE].crsf.jrUartChannelsCount + 8;
+          }
+        }
+        int16_t* channels = &channelOutputs[channelStart];
+
+        auto buffer = _extmodule_sport_buffer._buffer;
+        sdrv->sendPulses(sctx, buffer, channels, nChannels);
+      }
+    }
+  }
+#endif
 }
 
 void pulsesSendChannels()

@@ -24,3 +24,8 @@
 #include "hal/module_driver.h"
 
 extern const etx_proto_driver_t CrossfireDriver;
+#if defined(HARDWARE_EXTERNAL_MODULE)
+extern const etx_proto_driver_t CrossfireSportDriver;
+#endif
+
+uint8_t createCrossfireChannelsFrame(uint8_t moduleIdx, uint8_t * frame, int16_t * pulses, uint8_t endpoint = 0x07);

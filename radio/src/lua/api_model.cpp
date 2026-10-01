@@ -176,12 +176,38 @@ static int luaModelGetModule(lua_State *L)
   unsigned int idx = luaL_checkinteger(L, 1);
   if (idx < NUM_MODULES) {
     ModuleData & module = g_model.moduleData[idx];
-    lua_newtable(L);
+    uint8_t modelId = g_model.header.modelId[idx];
+    uint8_t firstChannel = module.channelsStart;
+    uint8_t channelsCount = module.getChannelsCount();
     lua_pushtableinteger(L, "subType", module.subType);
-    lua_pushtableinteger(L, "modelId", g_model.header.modelId[idx]);
-    lua_pushtableinteger(L, "firstChannel", module.channelsStart);
-    lua_pushtableinteger(L, "channelsCount", module.getChannelsCount());
-    lua_pushtableinteger(L, "Type", module.type);
+    lua_pushtableinteger(L, "modelId", modelId);
+    lua_pushtableinteger(L, "firstChannel", firstChannel);
+    lua_pushtableinteger(L, "channelsCount", channelsCount);
+    int modType = module.type;
+#if defined(CROSSFIRE)
+    if (isModuleCrossfire(idx) ||
+        (idx == EXTERNAL_MODULE && isModuleLua(EXTERNAL_MODULE) && module.sportPinMode == SPORT_PIN_MODE_CRSF)) {
+      modType = MODULE_TYPE_CROSSFIRE;
+    }
+#endif
+    lua_pushtableinteger(L, "Type", modType);
+    lua_pushtableinteger(L, "rawType", module.type);
+#if defined(CROSSFIRE)
+    lua_pushtableboolean(L, "isFullDuplex", isModuleCrossfireFull(idx));
+#endif
+#if defined(EXTMODULE_USART)
+    lua_pushtableinteger(L, "sportPinMode", module.sportPinMode);
+    if (idx == EXTERNAL_MODULE && isModuleCrossfireFull(idx)) {
+      lua_pushtableinteger(L, "sportPinModelId", module.crsf.jrUartModelId);
+      lua_pushtableinteger(L, "sportPinFirstChannel", module.crsf.jrUartChannelsStart);
+      uint8_t sportChCount = (module.crsf.jrUartChannelsCount != 0) ? (module.crsf.jrUartChannelsCount + 8) : 16;
+      lua_pushtableinteger(L, "sportPinChannelsCount", sportChCount);
+    } else {
+      lua_pushtableinteger(L, "sportPinModelId", g_model.header.modelId[idx]);
+      lua_pushtableinteger(L, "sportPinFirstChannel", module.channelsStart);
+      lua_pushtableinteger(L, "sportPinChannelsCount", module.getChannelsCount());
+    }
+#endif
 #if defined(MULTIMODULE)
     if (module.type == MODULE_TYPE_MULTIMODULE) {
       int protocol = g_model.moduleData[idx].multi.rfProtocol + 1;
@@ -246,7 +272,14 @@ static int luaModelSetModule(lua_State *L)
       if (!strcmp(key, "Type")) {
         uint8_t newtype = luaL_checkinteger(L, -1);
         if (newtype != module.type) {
-          setModuleType(idx, newtype);
+#if defined(CROSSFIRE)
+          if (newtype == MODULE_TYPE_CROSSFIRE && isModuleCrossfire(idx)) {
+            // Keep existing CRSF or CRSF_FULL variant
+          } else
+#endif
+          {
+            setModuleType(idx, newtype);
+          }
         }
       }
       else if (!strcmp(key, "subType")) {
@@ -261,6 +294,32 @@ static int luaModelSetModule(lua_State *L)
       else if (!strcmp(key, "channelsCount")) {
         module.channelsCount = luaL_checkinteger(L, -1) - 8;
       }
+#if defined(EXTMODULE_USART)
+      else if (!strcmp(key, "sportPinMode")) {
+        module.sportPinMode = luaL_checkinteger(L, -1);
+      }
+      else if (!strcmp(key, "sportPinModelId")) {
+        if (idx == EXTERNAL_MODULE && isModuleCrossfireFull(idx)) {
+          module.crsf.jrUartModelId = luaL_checkinteger(L, -1);
+        } else {
+          g_model.header.modelId[idx] = luaL_checkinteger(L, -1);
+        }
+      }
+      else if (!strcmp(key, "sportPinFirstChannel")) {
+        if (idx == EXTERNAL_MODULE && isModuleCrossfireFull(idx)) {
+          module.crsf.jrUartChannelsStart = luaL_checkinteger(L, -1);
+        } else {
+          module.channelsStart = luaL_checkinteger(L, -1);
+        }
+      }
+      else if (!strcmp(key, "sportPinChannelsCount")) {
+        if (idx == EXTERNAL_MODULE && isModuleCrossfireFull(idx)) {
+          module.crsf.jrUartChannelsCount = luaL_checkinteger(L, -1) - 8;
+        } else {
+          module.channelsCount = luaL_checkinteger(L, -1) - 8;
+        }
+      }
+#endif
 #if defined(MULTIMODULE)
       if (!strcmp(key, "protocol")) {
         protocol = luaL_checkinteger(L, -1);

@@ -54,8 +54,8 @@
 //
 static inline void check_yaml_funcs()
 {
-  static_assert(offsetof(ModuleData, ppm) == 4,"");
-  check_size<ModuleData, 29>();
+  static_assert(offsetof(ModuleData, ppm) == 5,"");
+  check_size<ModuleData, 30>();
 #if defined(STM32H7) || defined(STM32H7RS) || defined(STM32H5)
   static_assert(MAX_GVARS == 15,"");
 #else
@@ -1047,7 +1047,10 @@ static uint8_t select_mod_type(void* user, uint8_t* data, uint32_t bitoffs)
     case MODULE_TYPE_GHOST:
       return 8;
     case MODULE_TYPE_CROSSFIRE:
+    case MODULE_TYPE_CRSF_FULL:
       return 9;
+    case MODULE_TYPE_LUA:
+      return 0;
     case MODULE_TYPE_LEMON_DSMP:
       return 10;
   }

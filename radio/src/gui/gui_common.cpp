@@ -947,6 +947,14 @@ bool isModuleUsingSport(uint8_t moduleBay, uint8_t moduleType)
         return false;
 #endif
 
+    case MODULE_TYPE_CRSF_FULL:
+    case MODULE_TYPE_LUA:
+#if defined(HARDWARE_EXTERNAL_MODULE)
+      if (moduleBay == EXTERNAL_MODULE && g_model.moduleData[EXTERNAL_MODULE].sportPinMode == SPORT_PIN_MODE_OFF)
+        return false;
+#endif
+      return true;
+
     case MODULE_TYPE_CROSSFIRE:
 #if defined(HARDWARE_INTERNAL_MODULE)
       if (moduleBay == INTERNAL_MODULE)
@@ -1053,6 +1061,8 @@ bool isExternalModuleAvailable(int moduleType)
   switch (moduleType) {
     case MODULE_TYPE_NONE:
     case MODULE_TYPE_CROSSFIRE:
+    case MODULE_TYPE_CRSF_FULL:
+    case MODULE_TYPE_LUA:
     case MODULE_TYPE_GHOST:
       break;
     default:
@@ -1104,9 +1114,19 @@ bool isExternalModuleAvailable(int moduleType)
   }
 
 #if !defined(CROSSFIRE)
-  if (moduleType == MODULE_TYPE_CROSSFIRE)
+  if (moduleType == MODULE_TYPE_CROSSFIRE || moduleType == MODULE_TYPE_CRSF_FULL)
     return false;
 #endif
+
+  if (moduleType == MODULE_TYPE_CRSF_FULL || moduleType == MODULE_TYPE_LUA) {
+#if defined(EXTMODULE_USART)
+    return modulePortFind(EXTERNAL_MODULE, ETX_MOD_TYPE_SERIAL,
+                          ETX_MOD_PORT_UART, ETX_Pol_Normal,
+                          ETX_MOD_DIR_TX_RX | ETX_MOD_FULL_DUPLEX);
+#else
+    return false;
+#endif
+  }
 
 #if !defined(GHOST)
   if (moduleType == MODULE_TYPE_GHOST)
@@ -1170,7 +1190,7 @@ bool isExternalModuleAvailable(int moduleType)
 bool isRfProtocolAvailable(int protocol)
 {
 #if defined(CROSSFIRE) && defined(HARDWARE_EXTERNAL_MODULE)
-  if (protocol != MODULE_SUBTYPE_PXX1_OFF && g_model.moduleData[EXTERNAL_MODULE].type == MODULE_TYPE_CROSSFIRE) {
+  if (protocol != MODULE_SUBTYPE_PXX1_OFF && isModuleCrossfire(EXTERNAL_MODULE)) {
     return false;
   }
 #endif
@@ -1492,6 +1512,11 @@ uint8_t MODULE_CHANNELS_ROWS(int moduleIdx)
   if (!IS_MODULE_ENABLED(moduleIdx)) {
     return HIDDEN_ROW;
   }
+#if defined(EXTMODULE_USART)
+  if (moduleIdx == EXTERNAL_MODULE && isModuleLua(moduleIdx) && g_model.moduleData[EXTERNAL_MODULE].sportPinMode == SPORT_PIN_MODE_OFF) {
+    return HIDDEN_ROW;
+  }
+#endif
 #if defined(MULTIMODULE)
   else if (isModuleMultimodule(moduleIdx)) {
     if (IS_RX_MULTI(moduleIdx))

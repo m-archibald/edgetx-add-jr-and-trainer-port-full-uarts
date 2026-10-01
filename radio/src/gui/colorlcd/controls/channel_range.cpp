@@ -109,8 +109,8 @@ void ChannelRange::setPpmFrameLenEditObject(NumberEdit* ppmFrameLenEditObject)
   this->ppmFrameLenEditObject = ppmFrameLenEditObject;
 }
 
-ModuleChannelRange::ModuleChannelRange(Window* parent, uint8_t moduleIdx) :
-    ChannelRange(parent), moduleIdx(moduleIdx)
+ModuleChannelRange::ModuleChannelRange(Window* parent, uint8_t moduleIdx, bool isJrUart) :
+    ChannelRange(parent), moduleIdx(moduleIdx), isJrUart(isJrUart)
 {
   build();
   update();
@@ -127,13 +127,13 @@ void ModuleChannelRange::update()
   } 
 #endif   
 
-  auto min_mod_ch = minModuleChannels(moduleIdx);
-  auto max_mod_ch = maxModuleChannels(moduleIdx);
+  auto min_mod_ch = getChannelsMin();
+  auto max_mod_ch = getChannelsMax();
   chEnd->enable(min_mod_ch < max_mod_ch);
 
   if (chEnd->getValue() > chEnd->getMax()) chEnd->setValue(chEnd->getMax());
 
-  if (!isModulePXX2(moduleIdx)) {
+  if (!isModulePXX2(moduleIdx) || isJrUart) {
     chEnd->setAvailableHandler(nullptr);
   }
 #if defined(PXX2)
@@ -147,39 +147,58 @@ void ModuleChannelRange::update()
 uint8_t ModuleChannelRange::getChannelsStart()
 {
   ModuleData* md = &g_model.moduleData[moduleIdx];
+  if (isJrUart)
+    return md->crsf.jrUartChannelsStart;
   return md->channelsStart;
 }
 
 void ModuleChannelRange::setChannelsStart(uint8_t val)
 {
   ModuleData* md = &g_model.moduleData[moduleIdx];
-  md->channelsStart = val;
+  if (isJrUart)
+    md->crsf.jrUartChannelsStart = val;
+  else
+    md->channelsStart = val;
 }
 
 int8_t ModuleChannelRange::getChannelsCount()
 {
   ModuleData* md = &g_model.moduleData[moduleIdx];
+  if (isJrUart) {
+    if (md->crsf.jrUartChannelsCount == 0)
+      return CROSSFIRE_CHANNELS_COUNT - 8;
+    return md->crsf.jrUartChannelsCount;
+  }
   return md->channelsCount;
 }
 
 void ModuleChannelRange::setChannelsCount(int8_t val)
 {
   ModuleData* md = &g_model.moduleData[moduleIdx];
-  md->channelsCount = val;
+  if (isJrUart)
+    md->crsf.jrUartChannelsCount = val;
+  else
+    md->channelsCount = val;
 }
 
 uint8_t ModuleChannelRange::getChannelsUsed()
 {
+  if (isJrUart)
+    return CROSSFIRE_CHANNELS_COUNT;
   return sentModuleChannels(moduleIdx);
 }
 
 uint8_t ModuleChannelRange::getChannelsMin()
 {
+  if (isJrUart)
+    return CROSSFIRE_CHANNELS_COUNT;
   return minModuleChannels(moduleIdx);
 }
 
 uint8_t ModuleChannelRange::getChannelsMax()
 {
+  if (isJrUart)
+    return CROSSFIRE_CHANNELS_COUNT;
   return maxModuleChannels(moduleIdx);
 }
 

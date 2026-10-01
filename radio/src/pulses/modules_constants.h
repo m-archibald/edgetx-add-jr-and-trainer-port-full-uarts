@@ -42,9 +42,23 @@ enum ModuleType {
   MODULE_TYPE_FLYSKY_AFHDS2A,
   MODULE_TYPE_FLYSKY_AFHDS3,
   MODULE_TYPE_LEMON_DSMP,
+  MODULE_TYPE_CRSF_FULL,
+  MODULE_TYPE_LUA,
   MODULE_TYPE_COUNT SKIP,
   MODULE_TYPE_MAX SKIP = MODULE_TYPE_COUNT - 1
 };
+
+enum ModuleSportPinMode {
+  SPORT_PIN_MODE_CRSF = 0,     // Standard Half-Duplex CRSF on Pin 5
+  SPORT_PIN_MODE_GHOST,        // ImmersionRC Ghost on Pin 5
+  SPORT_PIN_MODE_PXX1,         // FrSky S.Port / PXX1 telemetry on Pin 5
+  SPORT_PIN_MODE_SBUS,         // SBUS protocol on Pin 5
+  SPORT_PIN_MODE_TELEM_MIRROR, // Telemetry mirror out of Pin 5
+  SPORT_PIN_MODE_OFF,          // Disable Pin 5
+  SPORT_PIN_MODE_COUNT SKIP,
+  SPORT_PIN_MODE_MAX SKIP = SPORT_PIN_MODE_COUNT - 1
+};
+
 
 /* FrSky XJT / ISRM */
 

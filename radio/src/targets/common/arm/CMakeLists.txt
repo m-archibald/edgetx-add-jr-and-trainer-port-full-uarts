@@ -312,6 +312,7 @@ set(PULSES_SRC
   pulses.cpp
   ppm.cpp
   modules_helpers.cpp
+  lua_module.cpp
   )
 
 if(DSM2)

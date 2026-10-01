@@ -132,6 +132,12 @@ void setModuleType(uint8_t moduleIdx, uint8_t moduleType)
   else if (moduleData.type == MODULE_TYPE_LEMON_DSMP) {
     restartModule(moduleIdx);  // Restart DSMP when switching to it (example PPM->DSMP)
   }
+  else if (moduleData.type == MODULE_TYPE_CRSF_FULL) {
+    moduleData.sportPinMode = SPORT_PIN_MODE_OFF;
+  }
+  else if (moduleData.type == MODULE_TYPE_LUA) {
+    moduleData.sportPinMode = SPORT_PIN_MODE_CRSF;
+  }
   else
     resetAccessAuthenticationCount();
 }

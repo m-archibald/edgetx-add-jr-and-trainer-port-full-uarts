@@ -27,7 +27,7 @@
 
 #if defined(CROSSFIRE)
 
-uint8_t createCrossfireChannelsFrame(uint8_t moduleIdx, uint8_t * frame, int16_t * pulses);
+uint8_t createCrossfireChannelsFrame(uint8_t moduleIdx, uint8_t * frame, int16_t * pulses, uint8_t endpoint = 0x07);
 
 // Spec-defined part of the frame (0x16 RC Channels Packed): sync byte, type,
 // 16 x 11-bit channel packing. Expected bytes computed independently, not

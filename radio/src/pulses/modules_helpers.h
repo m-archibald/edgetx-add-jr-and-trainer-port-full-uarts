@@ -229,7 +229,13 @@ inline bool isModuleISRMAccess(uint8_t idx)
 #if defined(CROSSFIRE)
 inline bool isModuleCrossfire(uint8_t idx)
 {
-  return g_model.moduleData[idx].type == MODULE_TYPE_CROSSFIRE;
+  return g_model.moduleData[idx].type == MODULE_TYPE_CROSSFIRE ||
+         g_model.moduleData[idx].type == MODULE_TYPE_CRSF_FULL;
+}
+
+inline bool isModuleCrossfireFull(uint8_t idx)
+{
+  return g_model.moduleData[idx].type == MODULE_TYPE_CRSF_FULL;
 }
 
 inline bool isModuleELRS(uint8_t idx)
@@ -247,6 +253,11 @@ inline bool isModuleCrossfire(uint8_t idx)
   return false;
 }
 
+inline bool isModuleCrossfireFull(uint8_t idx)
+{
+  return false;
+}
+
 inline bool isModuleELRS(uint8_t idx)
 {
   return false;
@@ -257,6 +268,11 @@ inline bool isInternalModuleCrossfire()
   return false;
 }
 #endif
+
+inline bool isModuleLua(uint8_t idx)
+{
+  return g_model.moduleData[idx].type == MODULE_TYPE_LUA;
+}
 
 #if defined(GHOST)
 inline bool isModuleGhost(uint8_t idx)
@@ -454,6 +470,8 @@ static const int8_t maxChannelsModules_M8[] = {
   6, // MODULE_TYPE_FLYSKY_AFHDS2A: 14 channels
   10,// MODULE_TYPE_FLYSKY_AFHDS3: 18 channels
   4, // MODULE_TYPE_LEMON_DSMP: 12 channels for DSMX
+  CROSSFIRE_CHANNELS_COUNT - 8, // MODULE_TYPE_CRSF_FULL
+  0, // MODULE_TYPE_LUA
 };
 
 static_assert(MODULE_TYPE_COUNT == sizeof(maxChannelsModules_M8),
@@ -561,6 +579,9 @@ inline bool isModuleModelIndexAvailable(uint8_t idx)
 
   if (isModuleCrossfire(idx))
     return true;
+
+  if (idx == EXTERNAL_MODULE && isModuleLua(idx))
+    return g_model.moduleData[EXTERNAL_MODULE].sportPinMode == SPORT_PIN_MODE_CRSF;
 
   if (isModuleAFHDS3(idx))
     return true;
